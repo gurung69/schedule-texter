@@ -10,11 +10,20 @@ from googleapiclient.errors import HttpError
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
+def send_text(events):
+  message = "GoodMorning! Your scheduled events tonight:\n"
+  for event in events:
+
+    start = datetime.datetime.fromisoformat(event["start"].get("dateTime", event["start"].get("date")))
+    end = datetime.datetime.fromisoformat(event["end"].get("dateTime", event["end"].get("date")))
+    message += f" {start.hour}:{start.minute:02d}-{end.hour}:{end.minute:02d}: "
+    message += event["summary"] + '\n'
+ 
+  print(message)
+
+
 
 def main():
-  """Shows basic usage of the Google Calendar API.
-  Prints the start and name of the next 10 events on the user's calendar.
-  """
   creds = None
   # The file token.json stores the user's access and refresh tokens, and is
   # created automatically when the authorization flow completes for the first
@@ -40,22 +49,21 @@ def main():
     # Get the current date in UTC
     utc_today = datetime.datetime.now(datetime.timezone.utc).date()
 
+    # Get UTC of yesterday midnight
     yesterday_midnight = utc_today - datetime.timedelta(days=1)
-    
     yesterday_midnight = datetime.datetime.combine(yesterday_midnight, datetime.time(0, 0), datetime.timezone.utc)
+    # Get UTC of today midnight
     today_midnight = datetime.datetime.combine(utc_today, datetime.time(0, 0), datetime.timezone.utc)
 
     yesterday_midnight = yesterday_midnight.isoformat()
     today_midnight = today_midnight.isoformat()
    
-    print("Today's events")
     events_result = (
         service.events()
         .list(
             calendarId="primary",
             timeMin=yesterday_midnight,
             timeMax=today_midnight,
-            maxResults=10,
             singleEvents=True,
             orderBy="startTime",
         )
@@ -63,14 +71,7 @@ def main():
     )
     events = events_result.get("items", [])
 
-    if not events:
-      print("No upcoming events found.")
-      return
-
-    # Prints the start and name of the next 10 events
-    for event in events:
-      start = event["start"].get("dateTime", event["start"].get("date"))
-      print(start, event["summary"])
+    send_text(events)
 
   except HttpError as error:
     print(f"An error occurred: {error}")

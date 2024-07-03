@@ -7,10 +7,44 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from twilio.rest import Client
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
+def get_scheduled_events(service):
+  # Get the current date in UTC
+  utc_today = datetime.datetime.now(datetime.timezone.utc).date()
+
+  # Get UTC of today midnight
+  today_midnight = utc_today + datetime.timedelta(days=1)
+  today_midnight = datetime.datetime.combine(today_midnight, datetime.time(0, 0), datetime.timezone.utc)
+  # Get UTC of yesterday midnight
+  yesterday_midnight = datetime.datetime.combine(utc_today, datetime.time(0, 0), datetime.timezone.utc)
+
+  yesterday_midnight = yesterday_midnight.isoformat()
+  today_midnight = today_midnight.isoformat()
+
+  events_result = (
+    service.events()
+    .list(
+        calendarId="primary",
+        timeMin=yesterday_midnight,
+        timeMax=today_midnight,
+        singleEvents=True,
+        orderBy="startTime",
+    )
+    .execute()
+  )
+  events = events_result.get("items", [])
+  return events
+
+
 def send_text(events):
+  account_sid = os.environ["TWILIO_ACCOUT_SID"]
+  auth_token = os.environ['TWILIO_AUTH_TOKEN']
+  client = Client(account_sid, auth_token)
+
   message = "GoodMorning! Your scheduled events tonight:\n"
   for event in events:
 
@@ -18,8 +52,13 @@ def send_text(events):
     end = datetime.datetime.fromisoformat(event["end"].get("dateTime", event["end"].get("date")))
     message += f" {start.hour}:{start.minute:02d}-{end.hour}:{end.minute:02d}: "
     message += event["summary"] + '\n'
- 
-  print(message)
+
+  message = client.messages.create(
+    from_=os.environ['TWILIO_NUMBER'],
+    to=os.environ['PHONE_NUMBER'],
+    body=message
+  )
+
 
 
 
@@ -45,32 +84,7 @@ def main():
 
   try:
     service = build("calendar", "v3", credentials=creds)
-
-    # Get the current date in UTC
-    utc_today = datetime.datetime.now(datetime.timezone.utc).date()
-
-    # Get UTC of yesterday midnight
-    yesterday_midnight = utc_today - datetime.timedelta(days=1)
-    yesterday_midnight = datetime.datetime.combine(yesterday_midnight, datetime.time(0, 0), datetime.timezone.utc)
-    # Get UTC of today midnight
-    today_midnight = datetime.datetime.combine(utc_today, datetime.time(0, 0), datetime.timezone.utc)
-
-    yesterday_midnight = yesterday_midnight.isoformat()
-    today_midnight = today_midnight.isoformat()
-   
-    events_result = (
-        service.events()
-        .list(
-            calendarId="primary",
-            timeMin=yesterday_midnight,
-            timeMax=today_midnight,
-            singleEvents=True,
-            orderBy="startTime",
-        )
-        .execute()
-    )
-    events = events_result.get("items", [])
-
+    events = get_scheduled_events(service)
     send_text(events)
 
   except HttpError as error:

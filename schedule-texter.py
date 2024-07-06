@@ -1,6 +1,8 @@
 import datetime
 import os.path
 
+from dotenv import load_dotenv
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -11,6 +13,7 @@ from twilio.rest import Client
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+
 
 def get_scheduled_events(service):
   # Get the current date in UTC
@@ -46,6 +49,10 @@ def send_text(events):
   client = Client(account_sid, auth_token)
 
   message = "GoodMorning! Your scheduled events tonight:\n"
+  
+  if not events:
+    message += "No Scheduled events today"
+
   for event in events:
 
     start = datetime.datetime.fromisoformat(event["start"].get("dateTime", event["start"].get("date")))
